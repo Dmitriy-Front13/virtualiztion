@@ -1,18 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const App = () => {
   const [users, setUsers] = useState([]); // Массив пользователей
-  const [page, setPage] = useState(1); // Текущая страница
   const [isLoading, setIsLoading] = useState(false); // Индикатор загрузки
+  const triggerRef = useRef(null);
+  const observer = useRef(null);
 
   // Функция для загрузки пользователей с API
   const fetchUsers = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`https://randomuser.me/api/?results=10&page=${page}`);
+      const response = await fetch(`https://randomuser.me/api/?results=10&page=1`);
       const data = await response.json();
-      console.log(data);
-      
       setUsers((prevUsers) => [...prevUsers, ...data.results]); // Добавляем новых пользователей в массив
       setIsLoading(false);
     } catch (error) {
@@ -21,35 +20,42 @@ const App = () => {
     }
   };
 
-  // Эффект для загрузки данных при изменении страницы
   useEffect(() => {
-    fetchUsers();
-  }, [page]);
-
-  // Обработчик прокрутки страницы
-  const handleScroll = () => {
-    if (
-      window.innerHeight + document.documentElement.scrollTop >=
-      document.documentElement.offsetHeight - 200
-    ) {
-      setPage((prevPage) => prevPage + 1); // Увеличиваем страницу, чтобы загрузить новых пользователей
-    }
-  };
-
-  // Добавляем обработчик прокрутки при монтировании компонента
-  useEffect(() => {
-    window.addEventListener('scroll', handleScroll);
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-    };
+    observer.current = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting) {
+          fetchUsers();
+        }
+      },
+      { threshold: 1.0 } // Настраиваем, чтобы срабатывать, когда элемент полностью видим
+    );
   }, []);
+  
+  useEffect(() => {
+    if (triggerRef.current) {
+      observer.current.observe(triggerRef.current); // Начинаем отслеживать последний элемент
+    }
+
+    // Отключение наблюдателя при размонтировании
+    return () => {
+      if (triggerRef.current) {
+        observer.current.unobserve(triggerRef.current);
+      }
+    };
+  }, [users]); // Запускаем эффект каждый раз, когда меняется список пользователей
 
   return (
     <div className="App" style={{ padding: '20px' }}>
       <h1>Бесконечная прокрутка - Пользователи</h1>
       <div className="user-list">
         {users.map((user, index) => (
-          <div key={index} className="user-card" style={userCardStyle}>
+          <div
+            key={index}
+            className="user-card"
+            style={userCardStyle}
+            ref={index === users.length - 1 ? triggerRef : null} // Привязываем ref к последнему элементу
+          >
             <img src={user.picture.medium} alt={user.name.first} style={imageStyle} />
             <div>
               <h3>{`${user.name.first} ${user.name.last}`}</h3>
